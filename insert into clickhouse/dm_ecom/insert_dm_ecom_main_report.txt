@@ -1,0 +1,73 @@
+select dm_ecom.main_report.ax_avg_price as ax_avg_price,
+       dm_ecom.main_report.ax_end_stock_pcs as ax_end_stock_pcs,
+       dm_ecom.main_report.ax_end_stock_rub as ax_end_stock_rub,
+       dm_ecom.main_report.clc_ax_diff_stock_pcs as clc_ax_diff_stock_pcs,
+       dm_ecom.main_report.clc_forecast_deadline as clc_forecast_deadline,
+       dm_ecom.main_report.clc_mp_calc_stock_pcs as clc_mp_calc_stock_pcs,
+       dm_ecom.main_report.clc_mp_diff_stock_pcs as clc_mp_diff_stock_pcs,
+       dm_ecom.main_report.dwh_ax_diff_stock_rub as dwh_ax_diff_stock_rub,
+       dm_ecom.main_report.flg_miss as flg_miss,
+       dm_ecom.main_report.flg_take_off as flg_take_off,
+       dm_ecom.main_report.item_id::varchar as item_id,
+       dm_ecom.main_report.item_name as item_name,
+       dm_ecom.main_report.load_dttm as load_dttm,
+       CASE WHEN SUBSTRING(dm_ecom.main_report.mp_account_name FROM 1 FOR 7) = 'OZON_FB' THEN
+       SUBSTRING(dm_ecom.main_report.mp_account_name FROM 10 FOR LENGTH(dm_ecom.main_report.mp_account_name) - 9)
+       ELSE dm_ecom.main_report.mp_account_name END AS mp_account_name,
+       dm_ecom.main_report.mp_end_stock_pcs as mp_end_stock_pcs,
+       dm_ecom.main_report.mp_external_id::varchar as mp_external_id,
+       dm_ecom.main_report.mp_order_active_pcs as mp_order_active_pcs,
+       dm_ecom.main_report.mp_order_cancelled_pcs as mp_order_cancelled_pcs,
+       dm_ecom.main_report.mp_order_closed_pcs as mp_order_closed_pcs,
+       dm_ecom.main_report.mp_order_new_pcs as mp_order_new_pcs,
+       dm_ecom.main_report.mp_reserved_pcs as mp_reserved_pcs,
+       dm_ecom.main_report.mp_return_active_pcs as mp_return_active_pcs,
+       dm_ecom.main_report.mp_return_closed_pcs as mp_return_closed_pcs,
+       dm_ecom.main_report.mp_start_stock_pcs as mp_start_stock_pcs,
+       dm_ecom.main_report.mp_stock_type as mp_stock_type,
+       dm_ecom.main_report.mp_supply_active_pcs as mp_supply_active_pcs,
+       dm_ecom.main_report.mp_supply_closed_pcs as mp_supply_closed_pcs,
+       dm_ecom.main_report.report_date as report_date,
+       AVG(dm_ecom.main_report.mp_order_closed_pcs - dm_ecom.main_report.mp_return_closed_pcs) OVER (
+        PARTITION BY dm_ecom.main_report.item_id, dm_ecom.main_report.mp_account_name 
+        ORDER BY dm_ecom.main_report.report_date 
+        ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+        ) AS avg_sales,
+       CASE WHEN LAG(dm_ecom.main_report.flg_miss) OVER (PARTITION BY dm_ecom.main_report.item_id, dm_ecom.main_report.mp_stock_type, dm_ecom.main_report.mp_account_name ORDER BY dm_ecom.main_report.report_date ) = 0 AND dm_ecom.main_report.flg_miss = 1 THEN 1 ELSE 0 END AS flg_miss_now,
+       SUM(dm_ecom.main_report.clc_mp_diff_stock_pcs) OVER (
+        PARTITION BY dm_ecom.main_report.item_id, dm_ecom.main_report.mp_account_name, dm_ecom.main_report.mp_stock_type
+        ORDER BY dm_ecom.main_report.report_date 
+        ROWS BETWEEN 7 PRECEDING AND CURRENT ROW
+       ) AS sum_week_diff_pcs,
+       AVG(NULLIF(dm_ecom.main_report.mp_end_stock_pcs, 0) ) OVER (
+        PARTITION BY dm_ecom.main_report.item_id, dm_ecom.main_report.mp_account_name, dm_ecom.main_report.mp_stock_type
+        ORDER BY dm_ecom.main_report.report_date 
+        ROWS BETWEEN 7 PRECEDING AND CURRENT ROW
+       ) AS avg_mp_stock_week,
+       AVG(dm_ecom.main_report.mp_order_new_pcs - dm_ecom.main_report.mp_order_cancelled_pcs + dm_ecom.main_report.mp_return_closed_pcs) OVER (
+        PARTITION BY dm_ecom.main_report.item_id, dm_ecom.main_report.mp_account_name, dm_ecom.main_report.mp_stock_type
+        ORDER BY dm_ecom.main_report.report_date 
+        ROWS BETWEEN 7 PRECEDING AND CURRENT ROW
+       ) AS avg_sales_week,
+       SUM(dm_ecom.main_report.mp_order_new_pcs - dm_ecom.main_report.mp_order_cancelled_pcs + dm_ecom.main_report.mp_return_closed_pcs) OVER (
+        PARTITION BY dm_ecom.main_report.item_id, dm_ecom.main_report.mp_account_name, dm_ecom.main_report.mp_stock_type
+        ORDER BY dm_ecom.main_report.report_date 
+        ROWS BETWEEN 7 PRECEDING AND CURRENT ROW
+       ) AS total_sales_week,
+       SUM(dm_ecom.main_report.mp_order_new_pcs - dm_ecom.main_report.mp_order_cancelled_pcs + dm_ecom.main_report.mp_return_closed_pcs) OVER (
+        PARTITION BY dm_ecom.main_report.item_id, dm_ecom.main_report.mp_account_name, dm_ecom.main_report.mp_stock_type
+        ORDER BY dm_ecom.main_report.report_date 
+        ROWS BETWEEN 14 PRECEDING AND 7 PRECEDING
+       ) AS prev_week_sales,
+       AVG(NULLIF(dm_ecom.main_report.mp_end_stock_pcs, 0) ) OVER (
+        PARTITION BY dm_ecom.main_report.item_id, dm_ecom.main_report.mp_account_name, dm_ecom.main_report.mp_stock_type
+        ORDER BY dm_ecom.main_report.report_date 
+        ROWS BETWEEN 14 PRECEDING AND 7 PRECEDING
+       ) AS avg_mp_stock_prev_week,
+       item_warehouse_group as item_warehouse_group ,
+       item_account_group as item_account_group ,
+       ax_supply_pcs as ax_supply_pcs ,
+       ax_return_pcs as ax_return_pcs ,
+       mp_name  as mp_name 
+from dm_ecom.main_report
+where dm_ecom.main_report.report_date != '2024-04-04'
